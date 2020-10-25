@@ -1,65 +1,109 @@
-import Head from 'next/head'
-import styles from '../styles/Home.module.css'
+import { useEffect, useState } from "react";
+import { usePosition } from "use-position";
+import axios from "axios";
+import styled from "styled-components";
+import CssBaseline from "@material-ui/core/CssBaseline";
 
-export default function Home() {
+import Menubar from "./src/components/Menubar";
+import Toolbar from "./src/components/Toolbar";
+import Cards from "./src/components/Cards";
+import ErrorMessage from "./src/components/ErrorMessage";
+
+import debounce from "./src/helpers/debounce";
+import buildQueryParams from "./src/helpers/buildQueryParams";
+
+const Home = () => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [isMetric, setIsMetric] = useState(true);
+  const [location, setLocation] = useState();
+  const [fiveday, setFiveday] = useState({});
+  const [dateRange, setDateRange] = useState(Array(5));
+  const [postalCode, setPostalCode] = useState(null);
+  const [error, setError] = useState(null);
+
+  const handleScaleChange = debounce(() => setIsMetric(!isMetric));
+
+  const handlePostalCodeInput = debounce(({ target: { value } }) =>
+    setPostalCode(value)
+  );
+
+  const { latitude, longitude } = usePosition(true, {
+    enableHighAccuracy: true,
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!latitude && !longitude && !postalCode) return;
+
+        setError(null);
+        setIsLoading(true);
+
+        const payload = postalCode
+          ? { zip: postalCode }
+          : { lat: latitude, lon: longitude };
+
+        const qry = buildQueryParams(payload);
+
+        const {
+          data: { city: location = {}, forecast = {}, range = [] } = {},
+        } = await axios.get(
+          `/api/weather/data?metric=${isMetric ? 1 : 0}&${qry}`
+        );
+
+        setLocation(location);
+        setFiveday(forecast);
+        setDateRange(range);
+        setIsLoading(false);
+      } catch (error) {
+        setError(error);
+        setDateRange(Array(5));
+      }
+    })();
+  }, [latitude, longitude, postalCode, isMetric]);
+
   return (
-    <div className={styles.container}>
-      <Head>
-        <title>Create Next App</title>
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
+    <>
+      <CssBaseline />
+      <Menubar />
+      <Wrapper>
+        <Toolbar
+          isMetric={isMetric}
+          isLoading={isLoading}
+          handlePostalCodeChange={handlePostalCodeInput}
+          handleScaleChange={handleScaleChange}
+          location={location}
+        />
+        <ErrorMessage error={error} />
+        <Cards
+          isLoading={isLoading}
+          isMetric={isMetric}
+          error={error}
+          data={dateRange}
+          days={fiveday}
+        />
+      </Wrapper>
+    </>
+  );
+};
 
-      <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
+export default Home;
 
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.js</code>
-        </p>
+const Wrapper = styled.div`
+  display: flex;
+  flex-flow: column;
+  margin: 0 auto;
+  width: 98%;
+  max-width: 960px;
+  position: relative;
+  height: 75vh;
 
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
+  @media (min-width: 768px) {
+    justify-content: center;
+    max-width: 95%;
+  }
 
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/master/examples"
-            className={styles.card}
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/import?filter=next.js&utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
-      </main>
-
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Powered by{' '}
-          <img src="/vercel.svg" alt="Vercel Logo" className={styles.logo} />
-        </a>
-      </footer>
-    </div>
-  )
-}
+  @media (min-width: 960px) {
+    max-width: 75%;
+  }
+`;
